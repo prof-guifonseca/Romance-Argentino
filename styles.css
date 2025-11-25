@@ -744,6 +744,37 @@ a {
   color: #fff;
 }
 
+/* Área de login unificada (Google) */
+.auth-card {
+  border: 1px dashed var(--border);
+  background: linear-gradient(135deg, rgba(232, 93, 117, 0.04), rgba(103, 150, 255, 0.05));
+}
+
+.auth-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0;
+}
+
+.auth-user {
+  font-weight: 600;
+  color: var(--text-main);
+}
+
+.google-signin {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.subtitle.small {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
 .cloud-entries {
   background: linear-gradient(135deg, rgba(232, 93, 117, 0.1), rgba(103, 150, 255, 0.08));
   border-radius: 14px;
