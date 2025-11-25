@@ -210,7 +210,7 @@ app.post('/auth/login', (req, res) => {
   }
   if (USERS[username] && USERS[username] === password) {
     req.session.user = { username };
-    return res.json({ message: 'Login realizado com sucesso' });
+    return res.json({ message: 'Login realizado com sucesso', user: req.session.user });
   }
   return res.status(401).json({ error: 'Credenciais inválidas' });
 });
@@ -265,7 +265,7 @@ app.post('/auth/logout', (req, res) => {
 // GET /auth/me – Return the logged in username, if any.
 app.get('/auth/me', (req, res) => {
   if (req.session && req.session.user) {
-    res.json({ user: req.session.user.username });
+    res.json({ user: req.session.user });
   } else {
     res.json({ user: null });
   }
