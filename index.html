@@ -16,6 +16,13 @@
   <link rel="manifest" href="manifest.json" />
   <!-- Theme color will be overwritten by CSS variables; kept here for PWA splash screens -->
   <meta name="theme-color" content="#e85d75" />
+  
+  <!-- Configuração do login Google -->
+  <!-- O client ID definido aqui deve corresponder à variável de ambiente
+       GOOGLE_CLIENT_ID no servidor. Substitua "YOUR_GOOGLE_CLIENT_ID" pelo
+       ID real do seu projeto no Google Cloud Console. -->
+  <meta name="google-client-id" content="YOUR_GOOGLE_CLIENT_ID" />
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
   <body>
     <!-- Navegação principal do aplicativo. Este menu permite alternar entre as

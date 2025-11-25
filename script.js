@@ -849,18 +849,22 @@ async function updateDiary() {
  */
 async function loadMemoriesForDay(dayId) {
   try {
-    const res = await fetch('/memories?day=' + encodeURIComponent(dayId), {
-      credentials: 'include',
-    });
+    let url;
+    // Use o endpoint autenticado quando houver uma sessão válida; caso contrário,
+    // recorra ao endpoint público de memórias.
+    if (window.isLoggedIn) {
+      url = '/memories?day=' + encodeURIComponent(dayId);
+    } else {
+      url = '/public-memories?day=' + encodeURIComponent(dayId);
+    }
+    const res = await fetch(url, { credentials: 'include' });
     if (res.status === 401) {
-      // Se não autenticado, remove memórias do painel para evitar mostrar dados vazios
       renderDayMemories(dayId, null);
       return;
     }
     const data = await res.json();
     renderDayMemories(dayId, Array.isArray(data) ? data : []);
   } catch (err) {
-    // Em caso de erro, não exibe memórias
     renderDayMemories(dayId, null);
   }
 }
@@ -1018,13 +1022,29 @@ window.renderDayMemories = renderDayMemories;
  */
 async function loadCoverMemories() {
   try {
-    const res = await fetch('/memories', { credentials: 'include' });
+    let url;
+    // Quando logado, recupera todas as memórias do usuário e filtra as que
+    // não possuem dia; quando não logado, solicita apenas memórias públicas
+    // de capa via query `day=`.
+    if (window.isLoggedIn) {
+      url = '/memories';
+    } else {
+      url = '/public-memories?day=';
+    }
+    const res = await fetch(url, { credentials: 'include' });
     if (res.status === 401) {
       renderCoverMemories(null);
       return;
     }
     const data = await res.json();
-    const noDay = (Array.isArray(data) ? data : []).filter((mem) => mem.day === undefined || mem.day === null || String(mem.day).trim() === '');
+    let noDay;
+    if (window.isLoggedIn) {
+      noDay = (Array.isArray(data) ? data : []).filter(
+        (mem) => mem.day === undefined || mem.day === null || String(mem.day).trim() === ''
+      );
+    } else {
+      noDay = Array.isArray(data) ? data : [];
+    }
     renderCoverMemories(noDay);
   } catch (err) {
     renderCoverMemories(null);
