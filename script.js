@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   initBackToTop();
   registerServiceWorker();
+  setupGlobalAuthUI();
 
   // Verifica estado de autenticação e carrega progresso antes de
   // inicializar o diário. Isto garante que o estado de conclusão de
@@ -658,9 +659,9 @@ async function checkAuthStatus() {
   try {
     const res = await fetch('/auth/me', { credentials: 'include' });
     const data = await res.json();
-    window.isLoggedIn = !!(data && data.user);
+    setAuthState(!!(data && data.user), data ? data.user : null);
   } catch (_err) {
-    window.isLoggedIn = false;
+  window.isLoggedIn = false
   }
 }
 
@@ -1215,6 +1216,189 @@ function registerServiceWorker() {
     });
   }
 }
+
+/**
+ * Configura o fluxo de autenticação unificado do aplicativo. Renderiza o
+ * botão do Google na área principal, mostra o usuário logado, permite sair e
+ * dispara eventos globais para que outros módulos reajam às mudanças de
+ * sessão (memórias, progresso do roteiro etc.).
+ */
+function setupGlobalAuthUI() {
+  const googleBox = document.getElementById('google-signin-global');
+  const feedback = document.getElementById('auth-feedback-global');
+  const logoutBtn = document.getElementById('auth-logout-btn');
+
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', async () => {
+      if (feedback) {
+        feedback.textContent = 'Encerrando sessão...';
+        feedback.classList.remove('error');
+      }
+      await handleLogout();
+    });
+  }
+
+  if (googleBox) {
+    registerGoogleButton(googleBox, feedback);
+  }
+
+  document.addEventListener('auth-changed', updateGlobalAuthUI);
+  updateGlobalAuthUI();
+}
+
+/**
+ * Atualiza o cartão de autenticação conforme o estado atual.
+ */
+function updateGlobalAuthUI() {
+  const infoEl = document.getElementById('auth-user-info');
+  const logoutBtn = document.getElementById('auth-logout-btn');
+  const googleBox = document.getElementById('google-signin-global');
+  const feedback = document.getElementById('auth-feedback-global');
+
+  if (window.isLoggedIn) {
+    if (infoEl) {
+      const username = window.currentUser?.name || window.currentUser?.username || 'Usuário autenticado';
+      infoEl.textContent = `Logado como ${username}`;
+    }
+    if (logoutBtn) logoutBtn.classList.remove('hidden');
+    if (googleBox) googleBox.classList.add('hidden');
+    if (feedback) feedback.textContent = '';
+  } else {
+    if (infoEl) infoEl.textContent = 'Sessão não iniciada';
+    if (logoutBtn) logoutBtn.classList.add('hidden');
+    if (googleBox) googleBox.classList.remove('hidden');
+  }
+}
+
+/**
+ * Obtém o client ID do Google definido no HTML.
+ */
+function getGoogleClientId() {
+  const meta = document.querySelector('meta[name="google-client-id"]');
+  return meta && meta.content ? meta.content.trim() : '';
+}
+
+/**
+ * Renderiza o botão de login do Google no contêiner fornecido e registra o
+ * callback que envia o token ao backend. Pode ser reutilizado por outras
+ * seções (ex.: painel de memórias) para compartilhar o mesmo fluxo de sessão.
+ *
+ * @param {HTMLElement} target Elemento onde o botão será renderizado
+ * @param {HTMLElement|null} feedbackEl Elemento para mensagens de erro/status
+ */
+function registerGoogleButton(target, feedbackEl) {
+  if (!target) return;
+  const clientId = getGoogleClientId();
+  if (!clientId) {
+    if (feedbackEl) {
+      feedbackEl.textContent = 'Configure o Google Client ID para habilitar o login.';
+      feedbackEl.classList.add('error');
+    }
+    return;
+  }
+  const attempt = () => {
+    if (window.google && google.accounts && google.accounts.id) {
+      google.accounts.id.initialize({
+        client_id: clientId,
+        auto_select: true,
+        callback: (resp) => handleGoogleCredential(resp, feedbackEl),
+      });
+      google.accounts.id.renderButton(target, {
+        theme: 'outline',
+        size: 'large',
+        locale: 'pt-BR',
+      });
+      try {
+        google.accounts.id.prompt();
+      } catch (_e) {
+        // Prompt pode falhar silenciosamente se o navegador bloquear popups; ignore.
+      }
+    } else {
+      setTimeout(attempt, 400);
+    }
+  };
+  attempt();
+}
+// Disponibiliza para outros módulos (ex.: memories.js)
+window.registerGoogleButton = registerGoogleButton;
+
+/**
+ * Envia a credencial Google ao backend e atualiza o estado global de login.
+ */
+async function handleGoogleCredential(resp, feedbackEl) {
+  const token = resp && resp.credential;
+  if (!token) {
+    if (feedbackEl) {
+      feedbackEl.textContent = 'Credencial Google ausente.';
+      feedbackEl.classList.add('error');
+    }
+    return;
+  }
+  if (feedbackEl) {
+    feedbackEl.textContent = 'Validando com o Google...';
+    feedbackEl.classList.remove('error');
+  }
+  try {
+    const response = await fetch('/auth/google', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ token }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      if (feedbackEl) {
+        feedbackEl.textContent = data.error || 'Login não autorizado.';
+        feedbackEl.classList.add('error');
+      }
+      setAuthState(false, null);
+      return;
+    }
+    if (feedbackEl) feedbackEl.textContent = '';
+    setAuthState(true, data.user || null);
+  } catch (err) {
+    if (feedbackEl) {
+      feedbackEl.textContent = 'Erro ao validar credencial do Google.';
+      feedbackEl.classList.add('error');
+    }
+    setAuthState(false, null);
+  }
+}
+
+/**
+ * Encerra a sessão atual.
+ */
+async function handleLogout() {
+  try {
+    await fetch('/auth/logout', { method: 'POST', credentials: 'include' });
+  } catch (_e) {
+    // ignora falhas
+  }
+  setAuthState(false, null);
+}
+
+/**
+ * Atualiza os flags globais de autenticação e notifica demais módulos.
+ */
+function setAuthState(isLoggedIn, user) {
+  const previous = window.isLoggedIn;
+  window.isLoggedIn = !!isLoggedIn;
+  window.currentUser = user || null;
+  updateGlobalAuthUI();
+  document.dispatchEvent(
+    new CustomEvent('auth-changed', {
+      detail: { isLoggedIn: window.isLoggedIn, user: window.currentUser },
+    })
+  );
+  // Ao mudar para autenticado, recarregue dados que dependem de sessão.
+  if (window.isLoggedIn && previous !== window.isLoggedIn) {
+    if (typeof loadProgress === 'function') loadProgress();
+    if (typeof updateDiary === 'function') updateDiary();
+    if (typeof refreshAllDayMemories === 'function') refreshAllDayMemories();
+    if (typeof loadCoverMemories === 'function') loadCoverMemories();
+  }
+}
+window.setAuthState = setAuthState;
 
 /**
  * Inicializa e aplica o tema claro/escuro. O valor inicial é
