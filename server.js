@@ -5,6 +5,7 @@ const session = require('express-session');
 const rateLimit = require('express-rate-limit');
 const multer = require('multer');
 const { v4: uuidv4 } = require('uuid');
+const { OAuth2Client } = require('google-auth-library');
 
 /*
  * Backend server for the shared memories PWA.
@@ -22,7 +23,15 @@ const { v4: uuidv4 } = require('uuid');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-
+const DEFAULT_GOOGLE_CLIENT_ID =
+  '705327422094-h2e2r0hongo8hj8588pud31t274mrqts.apps.googleusercontent.com';
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || DEFAULT_GOOGLE_CLIENT_ID;
+const GOOGLE_ALLOWED_EMAILS = process.env.GOOGLE_ALLOWED_EMAILS
+  ? process.env.GOOGLE_ALLOWED_EMAILS.split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean)
+  : [];
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 // -----------------------------------------------------------------------------
 // Configuration and helpers
 //
