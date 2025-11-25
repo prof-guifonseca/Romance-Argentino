@@ -661,7 +661,8 @@ async function checkAuthStatus() {
     const data = await res.json();
     setAuthState(!!(data && data.user), data ? data.user : null);
   } catch (_err) {
-  window.isLoggedIn = false
+    // Garante que toda a aplicação volte para o estado deslogado em caso de erro.
+    setAuthState(false, null);
   }
 }
 
