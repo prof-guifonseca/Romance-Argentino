@@ -128,6 +128,23 @@
       </div>
     </div>
 
+        <!-- Autenticação centralizada para todo o app. O login com Google aqui
+         libera as ações de marcar passeios como feitos, publicar memórias e
+         salvar progresso. Usa o mesmo backend de sessão consumido pela aba de
+         memórias. -->
+    <section class="card auth-card" id="auth-card">
+      <h2>🔐 Entrar para usar o app</h2>
+      <p class="subtitle">Use sua conta Google autorizada para desbloquear as ações do roteiro e do diário.</p>
+      <div class="auth-row">
+        <div id="auth-user-info" class="auth-user">Sessão não iniciada</div>
+        <button id="auth-logout-btn" class="secondary hidden" type="button">Sair</button>
+      </div>
+      <div id="google-signin-global" class="google-signin"></div>
+      <p id="auth-feedback-global" class="feedback" role="status" aria-live="polite"></p>
+      <p class="subtitle small">O mesmo login vale para publicar memórias, marcar atividades como concluídas e manter tudo salvo.</p>
+    </section>
+
+
     <!-- Navegação em abas (tabs) e contêiner de painéis. Esta barra
          fica logo após o resumo geral para que a visão geral da
          viagem seja apresentada antes dos detalhes de cada dia. O
