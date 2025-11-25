@@ -1,5 +1,5 @@
 {
-  "appId": "com.example.honeymoon",
+  "appId": "https://romance-argentino.onrender.com",
   "appName": "Honeymoon BA",
   "webDir": ".",
   "bundledWebRuntime": false,
