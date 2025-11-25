@@ -215,6 +215,46 @@ app.post('/auth/login', (req, res) => {
   return res.status(401).json({ error: 'Credenciais inválidas' });
 });
 
+// POST /auth/google – Validate a Google ID token and create a session for the
+// authenticated user. Only emails listed in GOOGLE_ALLOWED_EMAILS are accepted
+// when the variable is defined.
+app.post('/auth/google', async (req, res) => {
+  const { token } = req.body || {};
+  if (!token) {
+    return res.status(400).json({ error: 'Token Google ausente' });
+  }
+
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: token,
+      audience: GOOGLE_CLIENT_ID,
+    });
+    const payload = ticket.getPayload();
+    const email = payload?.email?.toLowerCase();
+    const emailVerified = payload?.email_verified;
+
+    if (!email || !emailVerified) {
+      return res.status(401).json({ error: 'E-mail não verificado pelo Google' });
+    }
+
+    if (GOOGLE_ALLOWED_EMAILS.length && !GOOGLE_ALLOWED_EMAILS.includes(email)) {
+      return res.status(403).json({ error: 'Usuário não autorizado para login Google' });
+    }
+
+    req.session.user = {
+      username: email,
+      name: payload?.name || email,
+      picture: payload?.picture,
+      provider: 'google',
+    };
+
+    return res.json({ message: 'Login Google realizado com sucesso', user: req.session.user });
+  } catch (err) {
+    console.error('Falha ao validar token Google', err?.message || err);
+    return res.status(401).json({ error: 'Credencial Google inválida' });
+  }
+});
+
 // POST /auth/logout – Destroy the current session.
 app.post('/auth/logout', (req, res) => {
   req.session.destroy(() => {
