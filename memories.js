@@ -56,13 +56,9 @@
       </div>
     `;
 
-    const loginForm = loginSection.querySelector('#mem-login-form');
-    const userInput = loginSection.querySelector('#mem-auth-username');
-    const passInput = loginSection.querySelector('#mem-auth-password');
     const logoutBtn = loginSection.querySelector('#mem-logout-btn');
     const loginFeedback = loginSection.querySelector('#mem-auth-feedback');
-    const loginRows = loginSection.querySelectorAll('.form-row');
-    const loginActionButtons = loginSection.querySelectorAll('button[data-action]');
+    const googleContainer = loginSection.querySelector('#google-signin-container');
     container.appendChild(loginSection);
 
     // Publish section (hidden until authenticated)
@@ -317,17 +313,14 @@
       publishSection.style.display = 'none';
       filterSection.style.display = 'none';
       listSection.style.display = 'none';
-      loginRows.forEach((row) => row.classList.remove('hidden'));
-      loginActionButtons.forEach((btn) => btn.classList.remove('hidden'));
       logoutBtn.classList.add('hidden');
       loginFeedback.textContent = '';
       loginFeedback.classList.remove('error');
       publishError.textContent = '';
       publishSuccess.textContent = '';
       // Exibe o container do botão Google ao voltar para a tela de login
-      const g = document.getElementById('google-signin-container');
-      if (g) {
-        g.style.display = '';
+      if (googleContainer) {
+        googleContainer.style.display = '';
       }
       // Oculta seções de memórias externas (por dia e capa) ao sair
       if (typeof window !== 'undefined') {
@@ -351,17 +344,14 @@
       publishSection.style.display = '';
       filterSection.style.display = '';
       listSection.style.display = '';
-      loginRows.forEach((row) => row.classList.add('hidden'));
-      loginActionButtons.forEach((btn) => btn.classList.add('hidden'));
       logoutBtn.classList.remove('hidden');
       loginFeedback.textContent = 'Sessão ativa.';
       loginFeedback.classList.remove('error');
       publishError.textContent = '';
       publishSuccess.textContent = '';
       // Oculta o botão Google após autenticação
-      const g = document.getElementById('google-signin-container');
-      if (g) {
-        g.style.display = 'none';
+      if (googleContainer) {
+        googleContainer.style.display = 'none';
       }
       loadMemories();
       // Após exibir a interface principal, atualizamos também os painéis de
@@ -387,25 +377,7 @@
       }
     }
 
-    /**
-     * Faz requisição para verificar usuário logado e exibe a UI
-     * apropriada.
-     */
-    async function checkAuth() {
-      try {
-        const res = await fetch('/auth/me', { credentials: 'include' });
-        const data = await res.json();
-        if (data && data.user) {
-          showApp();
-        } else {
-          showLogin();
-        }
-      } catch (_err) {
-        showLogin();
-      }
-    }
-
-    /**
+     /**
      * Renderiza a lista de memórias. Cada memória é exibida como um cartão
      * com título, descrição resumida, data, tags, local e mídia (se houver).
      *
@@ -636,45 +608,6 @@
       xhr.send(formData);
     }
 
-    // Event bindings
-    // Caso exista um formulário de login (usuário/senha), associamos o handler.
-    if (loginForm) {
-      loginForm.addEventListener('submit', async (ev) => {
-        ev.preventDefault();
-        loginFeedback.textContent = '';
-        loginFeedback.classList.remove('error');
-        // Processa login tradicional apenas se os campos existirem.
-        if (!userInput || !passInput) {
-          return;
-        }
-        const username = userInput.value.trim();
-        const password = passInput.value.trim();
-        if (!username || !password) return;
-        try {
-          const res = await fetch('/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ username, password }),
-          });
-          const data = await res.json();
-          if (res.ok) {
-            loginFeedback.textContent = 'Login realizado com sucesso! ✨';
-            // Define flag global de autenticação para habilitar ações restritas
-            if (typeof window !== 'undefined') {
-              window.isLoggedIn = true;
-            }
-            showApp();
-          } else {
-            loginFeedback.textContent = data.error || 'Usuário ou senha inválidos. Por favor, tente novamente.';
-            loginFeedback.classList.add('error');
-          }
-        } catch (err) {
-          loginFeedback.textContent = 'Erro ao conectar. Por favor, tente novamente mais tarde.';
-          loginFeedback.classList.add('error');
-        }
-      });
-    }
 
     logoutBtn.addEventListener('click', async () => {
       try {
@@ -686,8 +619,13 @@
         // ignora erros
       }
       // Ao sair, limpa flag de autenticação global
-      if (typeof window !== 'undefined') {
-        window.isLoggedIn = false;
+      if (typeof window !== 'undefined' && typeof window.setAuthState === 'function') {
+        window.setAuthState(false, null);
+      } else if (typeof window !== 'undefined') {
+      window.isLoggedIn = false;
+      document.dispatchEvent(
+         new CustomEvent('auth-changed', { detail: { isLoggedIn: false, user: null } })
+        );
       }
       showLogin();
     });
@@ -703,107 +641,23 @@
       loadMemories();
     });
 
-    /**
-     * Inicializa a autenticação via Google OAuth. Esta função lê o
-     * client_id do meta tag `google-client-id` no documento. Se a
-     * biblioteca Google Identity Services já estiver carregada, ela
-     * configura o botão de login e define um callback para enviar o
-     * token ao backend. Apenas usuários autorizados terão acesso. Caso
-     * a biblioteca ainda não tenha carregado, tenta novamente até que
-     * esteja disponível.
-     */
-    function initGoogleLogin() {
-      // Obtém o client ID da meta tag
-      const meta = document.querySelector('meta[name="google-client-id"]');
-      const clientId = meta && meta.content ? meta.content.trim() : '';
-      if (!clientId) {
-        console.warn('Google Client ID não definido (meta[name="google-client-id"]).');
-        return;
-      }
-      // Tenta inicializar quando a biblioteca estiver pronta
-      const attempt = () => {
-        if (window.google && google.accounts && google.accounts.id) {
-          try {
-            google.accounts.id.initialize({
-              client_id: clientId,
-              // Tente selecionar automaticamente a conta do usuário se ele já tiver
-              // autorizado o aplicativo anteriormente. Quando há apenas uma
-              // conta válida, o Google realiza o login silenciosamente e
-              // retorna a credencial sem exibir o prompt. Caso haja mais
-              // de uma sessão ou o usuário não tenha concedido permissão,
-              // o botão e o prompt ainda serão exibidos.
-              auto_select: true,
-              callback: async (resp) => {
-                // Limpa mensagens anteriores
-                loginFeedback.textContent = '';
-                loginFeedback.classList.remove('error');
-                const token = resp && resp.credential;
-                if (!token) {
-                  loginFeedback.textContent = 'Falha na autenticação Google.';
-                  loginFeedback.classList.add('error');
-                  return;
-                }
-                try {
-                  const response = await fetch('/auth/google', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ token }),
-                  });
-                  const data = await response.json();
-                  if (response.ok) {
-                    // Login autorizado
-                    if (typeof window !== 'undefined') {
-                      window.isLoggedIn = true;
-                    }
-                    showApp();
-                  } else {
-                    loginFeedback.textContent = data.error || 'Login não autorizado.';
-                    loginFeedback.classList.add('error');
-                  }
-                } catch (e) {
-                  loginFeedback.textContent = 'Erro ao validar credencial do Google.';
-                  loginFeedback.classList.add('error');
-                }
-              },
-            });
-            const containerEl = document.getElementById('google-signin-container');
-            if (containerEl) {
-              google.accounts.id.renderButton(containerEl, {
-                theme: 'outline',
-                size: 'large',
-                locale: 'pt-BR',
-              });
-              // Exibe o One Tap imediatamente após renderizar o botão. O
-              // método prompt() mostra um modal de login que permite ao
-              // usuário autenticar‑se em um clique. Se auto_select estiver
-              // habilitado e houver uma conta disponível, o prompt não
-              // será exibido e o login ocorrerá silenciosamente.
-              try {
-                google.accounts.id.prompt();
-              } catch (_e) {
-                // Se a biblioteca ainda não estiver pronta ou o prompt
-                // falhar, simplesmente ignore para evitar travar a UI.
-              }
-            }
-            // Fim: solicitamos o One Tap automaticamente
-          } catch (err) {
-            console.error('Erro ao inicializar login Google', err);
-          }
-        } else {
-          // Tenta novamente após um pequeno atraso se a lib ainda não estiver pronta
-          setTimeout(attempt, 500);
-        }
-      };
-      attempt();
+    // Integra o mesmo botão Google usado pelo restante do app.
+    if (googleContainer && typeof window.registerGoogleButton === 'function') {
+      window.registerGoogleButton(googleContainer, loginFeedback);   
     }
 
-    // Chama inicialização do login Google
-    initGoogleLogin();
-
-    // Inicializa verificando se já existe uma sessão válida
-    checkAuth();
-  }
+    // Sincroniza a interface com o estado global de autenticação.
+    const syncAuth = (loggedIn) => {
+      if (loggedIn) {
+        showApp();
+      } else {
+        showLogin();
+      }
+    };
+    document.addEventListener('auth-changed', (ev) => {
+      syncAuth(ev.detail && ev.detail.isLoggedIn);
+    });
+    syncAuth(!!window.isLoggedIn);
 
   // Exponibiliza a função globalmente
   window.setupMemoriesPanel = setupMemoriesPanel;
